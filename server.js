@@ -3,9 +3,6 @@ import fetch from "node-fetch";
 import path from "path";
 import { fileURLToPath } from "url";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -16,15 +13,24 @@ app.use((req, res, next) => {
     next();
 });
 
-// Serve static files from the 'public' directory
-app.use(express.static(path.join(__dirname, "public")));
+// Resolve __dirname in ESM
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Serve the index.html directly from the root directory
+app.get("/", (req, res) => {
+    res.sendFile(path.join(__dirname, "index.html"));
+});
+
+// Serve static files (style.css, script.js)
+app.use(express.static(__dirname));
 
 // Proxy endpoint to fetch external data
 app.get("/proxy", async (req, res) => {
     const targetUrl = req.query.url;
 
     if (!targetUrl) {
-        return res.status(400).send("Please provide a URL as a query parameter.");
+        return res.status(400).send("Please provide a URL.");
     }
 
     try {
