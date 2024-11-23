@@ -4,27 +4,21 @@ import puppeteer from 'puppeteer';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Enable CORS for all requests (useful for frontend to access the API)
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*");
-  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
-  next();
+// Define a route for the root URL
+app.get('/', (req, res) => {
+  res.send('Welcome to the Puppeteer Scraper!');
 });
 
-// Scrape function to get election data
+// Scrape function and other routes...
 async function scrapeData(url) {
   try {
-    // Launch a headless browser instance
     const browser = await puppeteer.launch();
     const page = await browser.newPage();
-
-    // Navigate to the target URL
     await page.goto(url, { waitUntil: 'domcontentloaded' });
 
-    // Extract candidates and their votes
     const result = await page.evaluate(() => {
       const candidates = [];
-      const rows = document.querySelectorAll('table tr'); // Modify the selector based on actual page structure
+      const rows = document.querySelectorAll('table tr'); // Modify the selector based on the actual page structure
       rows.forEach(row => {
         const columns = row.querySelectorAll('td');
         if (columns.length > 0) {
@@ -37,7 +31,6 @@ async function scrapeData(url) {
       return candidates;
     });
 
-    // Close the browser
     await browser.close();
 
     return result;
@@ -47,7 +40,6 @@ async function scrapeData(url) {
   }
 }
 
-// API route to fetch scraped data
 app.get('/scrape', async (req, res) => {
   const url = req.query.url;
 
@@ -57,13 +49,12 @@ app.get('/scrape', async (req, res) => {
 
   try {
     const data = await scrapeData(url);
-    res.json(data);  // Send scraped data as JSON response
+    res.json(data);
   } catch (error) {
     res.status(500).send('Error fetching data');
   }
 });
 
-// Start the server
 app.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
 });
