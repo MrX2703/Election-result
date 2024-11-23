@@ -1,49 +1,69 @@
-import express from "express";
-import fetch from "node-fetch";
-import path from "path";
-import { fileURLToPath } from "url";
+import express from 'express';
+import puppeteer from 'puppeteer';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Enable CORS for all requests
+// Enable CORS for all requests (useful for frontend to access the API)
 app.use((req, res, next) => {
-    res.header("Access-Control-Allow-Origin", "*");
-    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
-    next();
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+  next();
 });
 
-// Resolve __dirname in ESM
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Scrape function to get election data
+async function scrapeData(url) {
+  try {
+    // Launch a headless browser instance
+    const browser = await puppeteer.launch();
+    const page = await browser.newPage();
 
-// Serve the index.html directly from the root directory
-app.get("/", (req, res) => {
-    res.sendFile(path.join(__dirname, "index.html"));
-});
+    // Navigate to the target URL
+    await page.goto(url, { waitUntil: 'domcontentloaded' });
 
-// Serve static files (style.css, script.js)
-app.use(express.static(__dirname));
+    // Extract candidates and their votes
+    const result = await page.evaluate(() => {
+      const candidates = [];
+      const rows = document.querySelectorAll('table tr'); // Modify the selector based on actual page structure
+      rows.forEach(row => {
+        const columns = row.querySelectorAll('td');
+        if (columns.length > 0) {
+          const name = columns[0]?.textContent.trim();
+          const votes = columns[1]?.textContent.trim();
+          const result = columns[2]?.textContent.trim() || 'Pending';
+          candidates.push({ name, votes, result });
+        }
+      });
+      return candidates;
+    });
 
-// Proxy endpoint to fetch external data
-app.get("/proxy", async (req, res) => {
-    const targetUrl = req.query.url;
+    // Close the browser
+    await browser.close();
 
-    if (!targetUrl) {
-        return res.status(400).send("Please provide a URL.");
-    }
+    return result;
+  } catch (error) {
+    console.error('Error scraping data:', error);
+    return [];
+  }
+}
 
-    try {
-        const response = await fetch(targetUrl, { headers: { "User-Agent": "Mozilla/5.0" } });
-        const text = await response.text();
-        res.send(text);
-    } catch (error) {
-        console.error("Error fetching data:", error);
-        res.status(500).send("Failed to fetch data.");
-    }
+// API route to fetch scraped data
+app.get('/scrape', async (req, res) => {
+  const url = req.query.url;
+
+  if (!url) {
+    return res.status(400).send('Please provide a valid URL.');
+  }
+
+  try {
+    const data = await scrapeData(url);
+    res.json(data);  // Send scraped data as JSON response
+  } catch (error) {
+    res.status(500).send('Error fetching data');
+  }
 });
 
 // Start the server
 app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`Server running at http://localhost:${PORT}`);
 });
